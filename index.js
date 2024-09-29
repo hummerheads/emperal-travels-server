@@ -22,8 +22,7 @@ const client = new MongoClient(uri, {
 // Connect to MongoDB and set up routes
 async function run() {
   try {
-    // Connect the client to the server
-    await client.connect();
+
 
     const touristSpotCollections = client.db('spotDB').collection('spotCollections');
 
