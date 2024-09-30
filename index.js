@@ -8,9 +8,9 @@ const corsConfig = {
     origin: '*',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE']
-}
-app.use(cors(corsConfig))
-app.options("", cors(corsConfig))
+};
+app.use(cors(corsConfig));
+app.options("", cors(corsConfig));
 
 app.use(express.json());
 
@@ -19,107 +19,81 @@ const uri = `mongodb+srv://Amitumikeyahay:Amb0KzBetxDVVYBT@cluster0.ebsbi.mongod
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  }
+    serverApi: {
+        version: ServerApiVersion.v1,
+        strict: true,
+        deprecationErrors: true,
+    }
 });
 
 // Connect to MongoDB and set up routes
 async function run() {
-  try {
+    try {
+        const touristSpotCollections = client.db('spotDB').collection('spotCollections');
+        const profiles = client.db('spotDB').collection('profileCollection');
 
+        // Existing tourist spot routes...
 
-    const touristSpotCollections = client.db('spotDB').collection('spotCollections');
+        // User Registration
+        app.post('/register', async (req, res) => {
+            const { name, email, photoUrl } = req.body;
 
-    app.get('/all-tourist-spots', async (req, res) => {
-        const cursor = touristSpotCollections.find();
-        const result = await cursor.toArray();
-        res.send(result);
-    })
+            try {
+                const newUser = {
+                    name,
+                    email,
+                    photoUrl,
+                    bookmarkedSpots: [] // Initialize with an empty array
+                };
 
-    app.get('/all-tourist-spots/:id', async (req, res) => {
-        const id = req.params.id;
-        const query = {_id: new ObjectId(id)}
-        const result = await touristSpotCollections.findOne(query);
-        res.send(result);
-
-    })
-
-    app.post('/add-tourist-spot', async (req, res) => {
-        const newTouristSpot = req.body;
-        console.log(newTouristSpot);
-
-        try {
-            const result = await touristSpotCollections.insertOne(newTouristSpot);
-            res.status(201).send(result);
-        } catch (error) {
-            console.error("Error inserting document:", error);
-            res.status(500).send("Error inserting document");
-        }
-    });
-
-    app.put('/all-tourist-spots/:id', async (req, res) => {
-        const id = req.params.id;
-        const filter = {_id: new ObjectId(id)};
-        const options = {upsert: true};
-        const updatedTouristSpot = req.body;
-        const TouristSpot = {
-            $set: {
-                image: updatedTouristSpot.image,
-                tourists_spot_name: updatedTouristSpot.tourists_spot_name,
-                country_Name: updatedTouristSpot.country_Name,
-                location: updatedTouristSpot.location,
-                short_description: updatedTouristSpot.short_description,
-                average_cost: updatedTouristSpot.average_cost,
-                seasonality: updatedTouristSpot.seasonality,
-                travel_time: updatedTouristSpot.travel_time,
-                totaVisitorsPerYear: updatedTouristSpot.totaVisitorsPerYear,
-                user_email: updatedTouristSpot.user_email,
-                user_name: updatedTouristSpot.user_name
+                await profiles.insertOne(newUser);
+                res.status(201).send({ message: 'User registered successfully' });
+            } catch (error) {
+                console.error("Error registering user:", error);
+                res.status(400).send({ message: 'Error registering user', error });
             }
-        }
-        // Before the update operation, fetch the current document
-const existingSpot = await touristSpotCollections.findOne(filter);
-console.log("Existing spot:", existingSpot);
-console.log("Updated data:", updatedTouristSpot);
+        });
 
+        // Fetch User Profile
+        app.get('/user/profile', async (req, res) => {
+            const userId = req.user.uid; // Assuming you have middleware that sets req.user
 
-        const result = await touristSpotCollections.updateOne(filter, TouristSpot, options);
-        res.send(result);
-
-    })
-
-    app.delete('/all-tourist-spots/:id', async (req, res) => {
-        const id = req.params.id;
-        if (!ObjectId.isValid(id)) {
-            return res.status(400).send({ error: 'Invalid ID format' });
-        }
-    
-        const query = { _id: new ObjectId(id) };
-        
-        try {
-            const result = await touristSpotCollections.deleteOne(query);
-    
-            if (result.deletedCount === 0) {
-                return res.status(404).send({ error: 'Tourist spot not found' });
+            try {
+                const userProfile = await profiles.findOne({ _id: new ObjectId(userId) });
+                if (!userProfile) {
+                    return res.status(404).send({ message: 'User profile not found' });
+                }
+                res.send(userProfile);
+            } catch (error) {
+                console.error("Error fetching user profile:", error);
+                res.status(500).send({ message: 'Server error' });
             }
-    
-            res.send(result);
-        } catch (error) {
-            console.error('Error deleting document:', error);
-            res.status(500).send({ error: 'Error deleting document' });
-        }
-    });
-    
+        });
 
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You are successfully connected to MongoDB!");
-  } catch (error) {
-    console.error("Error connecting to MongoDB:", error);
-  }
+        // Remove Bookmark
+        app.delete('/user/bookmark/:userId/:spotId', async (req, res) => {
+            const { userId, spotId } = req.params;
+
+            try {
+                await profiles.updateOne(
+                    { _id: new ObjectId(userId) },
+                    { $pull: { bookmarkedSpots: new ObjectId(spotId) } }
+                );
+                res.send({ message: 'Bookmark removed successfully' });
+            } catch (error) {
+                console.error("Error removing bookmark:", error);
+                res.status(500).send({ message: 'Server error' });
+            }
+        });
+
+        // Existing tourist spot routes...
+
+        // Send a ping to confirm a successful connection
+        await client.db("admin").command({ ping: 1 });
+        console.log("Pinged your deployment. You are successfully connected to MongoDB!");
+    } catch (error) {
+        console.error("Error connecting to MongoDB:", error);
+    }
 }
 
 // Start the server and run the database connection
